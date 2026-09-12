@@ -1,0 +1,11 @@
+{
+  "name": "@shorts-automation/shared-config",
+  "version": "0.1.0",
+  "description": "Shared tooling configurations for Shorts Automation Studio",
+  "files": [
+    "tsconfig.base.json"
+  ],
+  "keywords": ["config"],
+  "author": "",
+  "license": "ISC"
+}
