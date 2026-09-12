@@ -20,9 +20,21 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
     QDRANT_URL: str = "http://qdrant:6333"
 
+    # Media Storage & Upload
+    MEDIA_STORAGE_PATH: str = "./storage"
+    MAX_UPLOAD_SIZE_MB: int = 500
+    ALLOWED_VIDEO_EXTENSIONS: List[str] = [".mp4", ".mov", ".webm"]
+    ALLOWED_VIDEO_MIME_TYPES: List[str] = [
+        "video/mp4",
+        "video/quicktime",
+        "video/webm",
+        "application/octet-stream"  # Fallback for some browsers on webm/mov
+    ]
+
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
+
 
     if HAS_PYDANTIC_SETTINGS and SettingsConfigDict is not None:
         model_config = SettingsConfigDict(

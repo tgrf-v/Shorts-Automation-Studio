@@ -12,11 +12,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger("shorts_api")
 
+from contextlib import asynccontextmanager
+from app.core.database import Base, engine
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema initialized/verified.")
+    except Exception as exc:
+        logger.warning(
+            f"Database auto-sync skipped (database might be initializing or unreachable): {exc}"
+        )
+    yield
+    logger.info(f"Shutting down {settings.APP_NAME}")
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # Setup CORS
@@ -58,11 +78,4 @@ async def health_check() -> HealthResponse:
         )
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    logger.info(f"Shutting down {settings.APP_NAME}")

@@ -1,1 +1,3 @@
-"""External service providers package (LLM, TTS, STT, Vision, Storage)."""
+from app.providers.storage import StorageProvider, LocalStorageProvider, storage_provider
+
+__all__ = ["StorageProvider", "LocalStorageProvider", "storage_provider"]
