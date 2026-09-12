@@ -10,33 +10,6 @@ from app.core.database import Base, get_db
 from app.providers.storage.local import LocalStorageProvider
 from app.services.media_metadata import MediaMetadataService
 
-# Use temporary sqlite database for tests
-TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
-test_engine = create_async_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
-TestSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-
-
-@pytest.fixture(autouse=True)
-def setup_test_db():
-    async def _init():
-        async with test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    async def _cleanup():
-        async with test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-
-    asyncio.run(_init())
-    yield
-    asyncio.run(_cleanup())
-
-
-async def override_get_db():
-    async with TestSessionLocal() as session:
-        yield session
-
-
-app.dependency_overrides[get_db] = override_get_db
 
 
 @pytest.mark.anyio

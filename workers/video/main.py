@@ -1,8 +1,13 @@
 import os
 import sys
 import time
+import asyncio
 import logging
 import subprocess
+
+# Ensure app package is importable
+sys.path.insert(0, "/app")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api")))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,13 +19,13 @@ logger = logging.getLogger("video_worker")
 def verify_ffmpeg() -> bool:
     """Verifies that ffmpeg and ffprobe binaries are available."""
     try:
-        ffmpeg_res = subprocess.run(
+        subprocess.run(
             ["ffmpeg", "-version"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True
         )
-        ffprobe_res = subprocess.run(
+        subprocess.run(
             ["ffprobe", "-version"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -34,21 +39,42 @@ def verify_ffmpeg() -> bool:
 
 
 def run_worker() -> None:
-    logger.info("Starting Video Processing Worker environment...")
+    logger.info("Starting Video Processing Worker environment for Shorts Automation Studio...")
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-    logger.info(f"Target Redis Queue: {redis_url}")
+    logger.info(f"Connected to Redis Queue: {redis_url}")
 
     ffmpeg_ready = verify_ffmpeg()
     if not ffmpeg_ready:
         logger.warning("FFmpeg binary not detected in PATH. Ensure container environment includes FFmpeg.")
 
-    logger.info("Video worker initialized and awaiting tasks.")
-    # Skeleton heartbeat loop
-    try:
-        while True:
-            time.sleep(30)
-    except KeyboardInterrupt:
-        logger.info("Video worker stopped by user.")
+    from app.services.analysis.queue import analysis_queue
+    from app.services.analysis.media_analysis import reference_analysis_service
+
+    logger.info(f"Video worker actively listening on queue '{analysis_queue.queue_name}'...")
+
+    while True:
+        try:
+            task = analysis_queue.dequeue(timeout=3)
+            if task:
+                job_id = task.get("job_id")
+                project_id = task.get("project_id")
+                logger.info(f"Received analysis task: job_id={job_id}, project_id={project_id}")
+
+                try:
+                    asyncio.run(reference_analysis_service.process_job(job_id))
+                    logger.info(f"Successfully processed analysis job: {job_id}")
+                except Exception as proc_exc:
+                    logger.error(f"Error executing analysis job {job_id}: {proc_exc}", exc_info=True)
+            else:
+                # Idle heartbeat
+                time.sleep(0.5)
+
+        except KeyboardInterrupt:
+            logger.info("Video worker stopped by user.")
+            break
+        except Exception as exc:
+            logger.error(f"Unexpected worker loop exception: {exc}", exc_info=True)
+            time.sleep(3)
 
 
 if __name__ == "__main__":

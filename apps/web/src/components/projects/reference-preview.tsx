@@ -21,6 +21,7 @@ export const ReferencePreview: React.FC<ReferencePreviewProps> = ({ asset }) => 
       {/* Video Player Column */}
       <div className="lg:col-span-7 flex flex-col justify-center items-center rounded-lg bg-black/80 border border-slate-800 p-2 overflow-hidden shadow-inner">
         <video
+          id="reference-video-player"
           controls
           preload="metadata"
           className="max-h-[480px] w-full rounded object-contain"

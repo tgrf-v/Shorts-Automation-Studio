@@ -7,9 +7,9 @@ import { getProject, deleteProject } from '@/lib/api/projects';
 import { Project, MediaAsset } from '@/lib/api/types';
 import { ReferenceUploader } from '@/components/projects/reference-uploader';
 import { ReferencePreview } from '@/components/projects/reference-preview';
+import { AnalysisWorkspace } from '@/components/analysis/analysis-workspace';
 import {
   ArrowLeft,
-  Sparkles,
   Loader2,
   Trash2,
   AlertCircle,
@@ -142,7 +142,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         </button>
       </div>
 
-      {/* Main Workflow Section: Reference Video */}
+      {/* Reference Video Section */}
       <div className="space-y-4">
         <div>
           <h2 className="text-base font-semibold text-white">Reference Video</h2>
@@ -158,23 +158,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         )}
       </div>
 
-      {/* Action Bar */}
-      <div className="flex items-center justify-between rounded-xl border border-surface-border bg-surface/50 p-5">
-        <div>
-          <h3 className="text-sm font-medium text-white">Next Step: Structural Video Analysis</h3>
-          <p className="text-xs text-slate-400">
-            Extract transcript, keyframes, and scene segmentation from reference video.
-          </p>
-        </div>
-        <button
-          disabled
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-xs font-medium text-slate-500 cursor-not-allowed border border-slate-700/60"
-          title="Analysis pipeline will be implemented in Milestone 3"
-        >
-          <Sparkles className="h-4 w-4 text-slate-500" />
-          <span>Analyze Video (Milestone 3)</span>
-        </button>
-      </div>
+      {/* Analysis Workspace (Milestone 3) */}
+      <AnalysisWorkspace
+        projectId={project.id}
+        hasReference={Boolean(project.reference_asset_id)}
+        onStatusChange={fetchProject}
+      />
     </div>
   );
 }

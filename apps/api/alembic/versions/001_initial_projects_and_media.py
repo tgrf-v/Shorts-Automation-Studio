@@ -5,9 +5,18 @@ Revises:
 Create Date: 2026-09-12 13:45:00.000000
 
 """
+import os
+import sys
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+
+# Ensure app module is in python path
+_curr = os.path.dirname(os.path.abspath(__file__))
+_root = os.path.abspath(os.path.join(_curr, "..", ".."))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
 from app.models.project import GUID
 
 # revision identifiers, used by Alembic.

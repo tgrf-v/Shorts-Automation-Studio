@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
 
+    # Reference Analysis Settings
+    STT_PROVIDER: str = "faster_whisper"
+    WHISPER_MODEL: str = "tiny"
+    KEYFRAMES_PER_SCENE: int = 3
+    ANALYSIS_MAX_DURATION_SECONDS: int = 180
+    ANALYSIS_QUEUE_NAME: str = "shorts:queue:analysis"
 
     if HAS_PYDANTIC_SETTINGS and SettingsConfigDict is not None:
         model_config = SettingsConfigDict(

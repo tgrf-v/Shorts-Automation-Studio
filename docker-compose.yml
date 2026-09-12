@@ -71,9 +71,15 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password_dev@postgres:5432/shorts_automation}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - MEDIA_STORAGE_PATH=/app/storage
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - STT_PROVIDER=${STT_PROVIDER:-faster_whisper}
+      - WHISPER_MODEL=${WHISPER_MODEL:-tiny}
+      - KEYFRAMES_PER_SCENE=${KEYFRAMES_PER_SCENE:-3}
+    volumes:
+      - ./storage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,14 +98,21 @@ services:
 
   worker:
     build:
-      context: ./workers
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: workers/Dockerfile
     container_name: shorts_worker
     restart: unless-stopped
     environment:
       - APP_ENV=${APP_ENV:-development}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password_dev@postgres:5432/shorts_automation}
+      - MEDIA_STORAGE_PATH=/app/storage
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - STT_PROVIDER=${STT_PROVIDER:-faster_whisper}
+      - WHISPER_MODEL=${WHISPER_MODEL:-tiny}
+      - KEYFRAMES_PER_SCENE=${KEYFRAMES_PER_SCENE:-3}
+    volumes:
+      - ./storage:/app/storage
     depends_on:
       redis:
         condition: service_healthy

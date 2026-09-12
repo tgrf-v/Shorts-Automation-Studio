@@ -115,7 +115,40 @@ python video/main.py
 
 ---
 
+## Milestone 3: Reference Video Analysis
+
+Milestone 3 implements reference video analysis, transforming uploaded Shorts videos into structured analysis data for subsequent production milestones.
+
+### Pipeline Workflow
+1. **Audio Extraction**: FFmpeg extracts audio from reference video to a temporary 16kHz mono PCM WAV file.
+2. **Speech-to-Text (STT)**: Transcribes spoken dialogue with high-precision timestamps (`start`, `end`, `text`) using `faster-whisper`.
+3. **Scene Cut Detection**: Identifies visual scene boundaries via FFmpeg visual cut filter (`select='gt(scene,0.3)'`).
+4. **Transcript Alignment**: Associates overlapping spoken transcript segments with each scene.
+5. **Keyframe Extraction**: Extracts 3 distributed keyframes per scene (at 20%, 50%, and 80% of scene duration) and computes a Laplacian variance sharpness quality score.
+6. **Scene Visual Description**: Uses multimodal Google Gemini Vision (with heuristic fallback) to generate structured descriptions (main subject, actions, objects, environment).
+7. **Persistence & Presentation**: Stores structured results in PostgreSQL (`transcripts`, `scenes`, `keyframes`, `analysis_jobs`) and provides an interactive Next.js workspace with live progress polling and keyframe modal preview.
+
+### Running Analysis Tests
+```bash
+cd apps/api
+python -m pytest tests -v
+```
+
+### Environment Variables
+- `STT_PROVIDER`: Speech-to-text provider (`faster_whisper` or `mock`, default: `faster_whisper`).
+- `WHISPER_MODEL`: Model size for Whisper (`tiny`, `base`, `small`, default: `tiny`).
+- `KEYFRAMES_PER_SCENE`: Number of keyframe captures per scene (default: `3`).
+- `ANALYSIS_MAX_DURATION_SECONDS`: Maximum reference duration in seconds (default: `180`).
+- `GEMINI_API_KEY`: Google Gemini API key for visual scene descriptions.
+
+### Known Limitations
+- Visual footage search, Indonesian script adaptation, TTS voice synthesis, caption burn-in, and timeline rendering are **not implemented yet** (scheduled for subsequent milestones).
+
+---
+
 ## Current Status
 
-**Milestone 1: Project Skeleton Initialized.**
-The foundational directory structure, configuration templates, Docker Compose specifications, type definitions, and healthcheck endpoints are established. Feature workflows (video upload, transcription, TTS, scene search, timeline composition) will be introduced in subsequent milestones according to the PRD roadmap.
+- **Milestone 1**: Project Skeleton & Micro-Service Architecture Initialized.
+- **Milestone 2**: Project Management, Media Asset Upload, and Technical Metadata Extraction.
+- **Milestone 3**: Reference Video Analysis (Audio Extraction, Faster-Whisper Transcription, Scene Cut Detection, Keyframe Scoring, Gemini Scene Descriptions, and Next.js Workspace).
+

@@ -3,6 +3,7 @@ from app.schemas.health import HealthResponse
 from app.core.config import settings
 from app.api.v1.projects import router as projects_router
 from app.api.v1.assets import router as assets_router
+from app.api.v1.analysis import router as analysis_router
 
 api_v1_router = APIRouter()
 
@@ -16,6 +17,7 @@ async def ping() -> HealthResponse:
         version="0.1.0"
     )
 
-# Include projects and assets routes
+# Include projects, assets, and reference analysis routes
 api_v1_router.include_router(projects_router)
 api_v1_router.include_router(assets_router)
+api_v1_router.include_router(analysis_router)
