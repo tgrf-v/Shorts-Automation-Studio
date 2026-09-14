@@ -384,6 +384,14 @@ export default function ProductionTimelinePage({ params }: TimelinePageProps) {
             <span>Audio & SFX (M9)</span>
           </Link>
 
+          <Link
+            href={`/projects/${projectId}/render`}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
+          >
+            <Film className="h-3.5 w-3.5" />
+            <span>Render (M10)</span>
+          </Link>
+
           <button
             onClick={fetchData}
             className="inline-flex items-center gap-1.5 rounded-xl border border-surface-border bg-surface px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"

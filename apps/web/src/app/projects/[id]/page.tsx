@@ -192,6 +192,15 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <span className="text-[10px] bg-purple-700/60 px-1.5 py-0.5 rounded text-purple-200">M9</span>
           </Link>
 
+          <Link
+            href={`/projects/${project.id}/render`}
+            className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-rose-600/20 hover:bg-rose-500 transition-colors"
+          >
+            <Film className="h-3.5 w-3.5" />
+            <span>Render</span>
+            <span className="text-[10px] bg-rose-700/60 px-1.5 py-0.5 rounded text-rose-200">M10</span>
+          </Link>
+
           <button
             onClick={handleDelete}
             className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500 hover:text-white transition-colors"

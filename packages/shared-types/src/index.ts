@@ -472,4 +472,86 @@ export interface SceneSFXSuggestionsResponse {
   suggestions: SFXSuggestionItem[];
 }
 
+// Milestone 10: Video Rendering & Composition Types
+export type RenderJobStatus =
+  | 'pending'
+  | 'validating'
+  | 'preparing'
+  | 'rendering'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
+export interface RenderConfig {
+  width?: number;
+  height?: number;
+  fps?: number;
+  video_codec?: string;
+  audio_codec?: string;
+  audio_bitrate?: string;
+  crf?: number;
+  preset?: string;
+  pixel_format?: string;
+  container?: string;
+}
+
+export interface RenderJobCreateRequest {
+  config?: RenderConfig | null;
+}
+
+export interface RenderChecklistResponse {
+  ready: boolean;
+  errors: string[];
+  warnings: string[];
+  details: {
+    production_timeline?: {
+      id: string;
+      version: number;
+      duration: number;
+      total_scenes: number;
+    } | null;
+    tts_generation?: {
+      id: string;
+      audio_path: string;
+      duration: number;
+    } | null;
+    caption_track?: {
+      id: string;
+      version: number;
+      total_segments: number;
+    } | null;
+    audio_timeline?: {
+      id: string;
+      version: number;
+      total_layers: number;
+    } | null;
+    [key: string]: any;
+  };
+}
+
+export interface RenderJobSummary {
+  id: string;
+  project_id: string;
+  status: RenderJobStatus;
+  progress_percentage: number;
+  current_step?: string | null;
+  output_format: string;
+  resolution: string;
+  duration?: number | null;
+  file_size_bytes?: number | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+}
+
+export interface RenderJob extends RenderJobSummary {
+  video_codec: string;
+  audio_codec: string;
+  fps: number;
+  output_video_path?: string | null;
+  stream_url?: string | null;
+  download_url?: string | null;
+  render_config?: Record<string, any> | null;
+  execution_log?: string | null;
+}

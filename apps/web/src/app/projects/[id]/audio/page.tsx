@@ -29,6 +29,7 @@ import {
   Zap,
   Subtitles,
   Clapperboard,
+  Film,
 } from 'lucide-react';
 import { getProject } from '@/lib/api/projects';
 import { getActiveProductionTimeline } from '@/lib/api/timeline';
@@ -490,6 +491,14 @@ export default function AudioTimelinePage({ params }: AudioPageProps) {
           >
             <Subtitles className="h-3.5 w-3.5" />
             <span>Captions (M8)</span>
+          </Link>
+
+          <Link
+            href={`/projects/${projectId}/render`}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
+          >
+            <Film className="h-3.5 w-3.5" />
+            <span>Render (M10)</span>
           </Link>
 
           {/* Version Switcher */}
