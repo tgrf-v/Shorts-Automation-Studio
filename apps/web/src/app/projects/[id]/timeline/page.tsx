@@ -24,6 +24,7 @@ import {
   X,
   Sliders,
   Subtitles,
+  Music,
 } from 'lucide-react';
 import { getProject } from '@/lib/api/projects';
 import {
@@ -373,6 +374,14 @@ export default function ProductionTimelinePage({ params }: TimelinePageProps) {
           >
             <Subtitles className="h-3.5 w-3.5" />
             <span>Captions (M8)</span>
+          </Link>
+
+          <Link
+            href={`/projects/${projectId}/audio`}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors"
+          >
+            <Music className="h-3.5 w-3.5" />
+            <span>Audio & SFX (M9)</span>
           </Link>
 
           <button

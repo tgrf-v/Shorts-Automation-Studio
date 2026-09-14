@@ -9,6 +9,7 @@ from app.api.v1.tts import router as tts_router
 from app.api.v1.footage import router as footage_router
 from app.api.v1.timeline import timeline_router
 from app.api.v1.captions import captions_router
+from app.api.v1.audio_mix import audio_mix_router
 
 api_v1_router = APIRouter()
 
@@ -22,7 +23,7 @@ async def ping() -> HealthResponse:
         version="0.1.0"
     )
 
-# Include projects, assets, reference analysis, script adaptation, TTS, footage, timeline, and captions routes
+# Include projects, assets, reference analysis, script adaptation, TTS, footage, timeline, captions, and audio mix routes
 api_v1_router.include_router(projects_router)
 api_v1_router.include_router(assets_router)
 api_v1_router.include_router(analysis_router)
@@ -31,3 +32,4 @@ api_v1_router.include_router(tts_router)
 api_v1_router.include_router(footage_router)
 api_v1_router.include_router(timeline_router)
 api_v1_router.include_router(captions_router)
+api_v1_router.include_router(audio_mix_router)

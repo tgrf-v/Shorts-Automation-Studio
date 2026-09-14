@@ -499,3 +499,124 @@ export interface CaptionSegmentUpdatePayload {
   style?: string | null;
   position?: string | null;
 }
+
+// Milestone 9: BGM & SFX Audio Layer Timeline Types
+export type AudioType = 'bgm' | 'sfx';
+export type AudioTimelineStatus = 'draft' | 'ready';
+
+export interface AudioAsset {
+  id: string;
+  project_id?: string | null;
+  type: AudioType;
+  name: string;
+  file_path: string;
+  source_url?: string | null;
+  duration: number;
+  format: string;
+  sample_rate: number;
+  channels: number;
+  volume: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AudioLayer {
+  id: string;
+  project_id: string;
+  audio_timeline_id: string;
+  audio_asset_id: string;
+  scene_id?: string | null;
+  type: AudioType;
+  name: string;
+  start_time: number;
+  end_time: number;
+  volume: number;
+  fade_in: number;
+  fade_out: number;
+  loop: boolean;
+  enabled: boolean;
+  ducking_enabled: boolean;
+  ducking_level: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  audio_asset?: AudioAsset | null;
+}
+
+export interface AudioTimelineSummary {
+  id: string;
+  project_id: string;
+  production_timeline_id: string;
+  version: number;
+  status: AudioTimelineStatus;
+  total_duration: number;
+  is_active: boolean;
+  ducking_enabled: boolean;
+  ducking_level: number;
+  total_layers: number;
+  bgm_layers_count: number;
+  sfx_layers_count: number;
+  created_at: string;
+}
+
+export interface AudioTimeline extends AudioTimelineSummary {
+  updated_at: string;
+  is_stale?: boolean;
+  stale_reasons?: string[];
+  layers: AudioLayer[];
+}
+
+export interface AudioTimelineGeneratePayload {
+  bgm_asset_id?: string | null;
+  production_timeline_id?: string | null;
+  ducking_enabled?: boolean;
+  ducking_level?: number;
+}
+
+export interface AudioLayerCreatePayload {
+  audio_asset_id: string;
+  type: AudioType;
+  name?: string | null;
+  start_time?: number;
+  end_time?: number | null;
+  volume?: number | null;
+  fade_in?: number;
+  fade_out?: number;
+  loop?: boolean | null;
+  enabled?: boolean;
+  ducking_enabled?: boolean | null;
+  ducking_level?: number;
+  scene_id?: string | null;
+  notes?: string | null;
+}
+
+export interface AudioLayerUpdatePayload {
+  name?: string | null;
+  start_time?: number | null;
+  end_time?: number | null;
+  volume?: number | null;
+  fade_in?: number | null;
+  fade_out?: number | null;
+  loop?: boolean | null;
+  enabled?: boolean | null;
+  ducking_enabled?: boolean | null;
+  ducking_level?: number | null;
+  notes?: string | null;
+}
+
+export interface SFXSuggestionItem {
+  type: string;
+  category: string;
+  keyword: string;
+  reason: string;
+  recommended_position: number;
+  recommended_volume: number;
+  recommended_duration: number;
+}
+
+export interface SceneSFXSuggestionsResponse {
+  scene_id: string;
+  scene_sequence: number;
+  suggestions: SFXSuggestionItem[];
+}
+

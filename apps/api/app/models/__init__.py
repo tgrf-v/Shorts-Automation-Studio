@@ -15,6 +15,7 @@ from app.models.footage_candidate import FootageCandidate
 from app.models.scene_footage_selection import SceneFootageSelection
 from app.models.production_timeline import ProductionTimeline, ProductionTimelineItem, TimelineStatus
 from app.models.caption import CaptionTrack, CaptionSegment, CaptionTrackStatus
+from app.models.audio_mix import AudioAsset, AudioTimeline, AudioLayer, AudioType, AudioTimelineStatus
 
 __all__ = [
     "Base",
@@ -49,4 +50,9 @@ __all__ = [
     "CaptionTrack",
     "CaptionSegment",
     "CaptionTrackStatus",
+    "AudioAsset",
+    "AudioTimeline",
+    "AudioLayer",
+    "AudioType",
+    "AudioTimelineStatus",
 ]
