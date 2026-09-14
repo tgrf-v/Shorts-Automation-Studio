@@ -15,7 +15,7 @@ sys.path.insert(0, "/app")
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api")))
 
 
-def run_worker() -> None:
+async def main_search_worker_loop() -> None:
     logger.info("Starting Visual Search Worker environment...")
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     qdrant_url = os.getenv("QDRANT_URL", "http://qdrant:6333")
@@ -29,7 +29,7 @@ def run_worker() -> None:
 
     while True:
         try:
-            task = footage_queue.dequeue(timeout=2)
+            task = await asyncio.to_thread(footage_queue.dequeue, 2)
             if task:
                 search_id = task.get("search_id")
                 scene_id = task.get("scene_id")
@@ -37,19 +37,23 @@ def run_worker() -> None:
                 logger.info(f"Search Worker received task: search_id={search_id}, scene_id={scene_id}, project_id={project_id}")
 
                 try:
-                    asyncio.run(footage_service.process_search_job(search_id))
+                    await footage_service.process_search_job(search_id)
                     logger.info(f"Search Worker completed search job: {search_id}")
                 except Exception as proc_exc:
                     logger.error(f"Error processing footage search {search_id}: {proc_exc}", exc_info=True)
             else:
-                time.sleep(0.5)
+                await asyncio.sleep(0.5)
 
-        except KeyboardInterrupt:
-            logger.info("Search worker stopped by user.")
+        except asyncio.CancelledError:
+            logger.info("Search worker task cancelled.")
             break
         except Exception as exc:
             logger.error(f"Unexpected search worker error: {exc}", exc_info=True)
-            time.sleep(3)
+            await asyncio.sleep(3)
+
+
+def run_worker() -> None:
+    asyncio.run(main_search_worker_loop())
 
 
 if __name__ == "__main__":

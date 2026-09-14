@@ -1,5 +1,7 @@
 import os
+import sys
 import time
+import asyncio
 import logging
 
 logging.basicConfig(
@@ -8,15 +10,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ai_worker")
 
-
-import sys
-import asyncio
-
 # Ensure app package is importable
 sys.path.insert(0, "/app")
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api")))
 
-def run_worker() -> None:
+
+async def main_ai_worker_loop() -> None:
     logger.info("Starting AI Worker environment...")
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     logger.info(f"Target Redis Queue: {redis_url}")
@@ -33,51 +32,55 @@ def run_worker() -> None:
     while True:
         try:
             # 1. Check script adaptation queue
-            task = script_queue.dequeue(timeout=1)
+            task = await asyncio.to_thread(script_queue.dequeue, 1)
             if task:
                 job_id = task.get("job_id")
                 project_id = task.get("project_id")
                 logger.info(f"AI Worker received script task: job_id={job_id}, project_id={project_id}")
                 try:
-                    asyncio.run(script_service.process_job(job_id))
+                    await script_service.process_job(job_id)
                     logger.info(f"AI Worker completed script job: {job_id}")
                 except Exception as exc:
                     logger.error(f"Error in script job {job_id}: {exc}", exc_info=True)
                 continue
 
             # 2. Check TTS generation queue
-            tts_task = tts_queue.dequeue(timeout=1)
+            tts_task = await asyncio.to_thread(tts_queue.dequeue, 1)
             if tts_task:
                 t_job_id = tts_task.get("job_id")
                 t_proj_id = tts_task.get("project_id")
                 logger.info(f"AI Worker received TTS task: job_id={t_job_id}, project_id={t_proj_id}")
                 try:
-                    asyncio.run(tts_service.process_job(t_job_id))
+                    await tts_service.process_job(t_job_id)
                     logger.info(f"AI Worker completed TTS job: {t_job_id}")
                 except Exception as t_exc:
                     logger.error(f"Error in TTS job {t_job_id}: {t_exc}", exc_info=True)
                 continue
 
             # 3. Check visual footage search queue
-            f_task = footage_queue.dequeue(timeout=1)
+            f_task = await asyncio.to_thread(footage_queue.dequeue, 1)
             if f_task:
                 f_search_id = f_task.get("search_id")
                 f_proj_id = f_task.get("project_id")
                 logger.info(f"AI Worker received footage search task: search_id={f_search_id}, project_id={f_proj_id}")
                 try:
-                    asyncio.run(footage_service.process_search_job(f_search_id))
+                    await footage_service.process_search_job(f_search_id)
                     logger.info(f"AI Worker completed footage search: {f_search_id}")
                 except Exception as f_exc:
                     logger.error(f"Error in footage search {f_search_id}: {f_exc}", exc_info=True)
                 continue
 
-            time.sleep(0.5)
-        except KeyboardInterrupt:
-            logger.info("AI worker stopped by user.")
+            await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            logger.info("AI worker task cancelled.")
             break
         except Exception as exc:
             logger.error(f"Unexpected AI worker error: {exc}", exc_info=True)
-            time.sleep(3)
+            await asyncio.sleep(3)
+
+
+def run_worker() -> None:
+    asyncio.run(main_ai_worker_loop())
 
 
 if __name__ == "__main__":

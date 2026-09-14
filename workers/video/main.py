@@ -38,7 +38,7 @@ def verify_ffmpeg() -> bool:
         return False
 
 
-def run_worker() -> None:
+async def main_worker_loop() -> None:
     logger.info("Starting Video Processing Worker environment for Shorts Automation Studio...")
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     logger.info(f"Connected to Redis Queue: {redis_url}")
@@ -61,70 +61,74 @@ def run_worker() -> None:
     while True:
         try:
             # 1. Check video analysis queue
-            task = analysis_queue.dequeue(timeout=1)
+            task = await asyncio.to_thread(analysis_queue.dequeue, 1)
             if task:
                 job_id = task.get("job_id")
                 project_id = task.get("project_id")
                 logger.info(f"Received analysis task: job_id={job_id}, project_id={project_id}")
 
                 try:
-                    asyncio.run(reference_analysis_service.process_job(job_id))
+                    await reference_analysis_service.process_job(job_id)
                     logger.info(f"Successfully processed analysis job: {job_id}")
                 except Exception as proc_exc:
                     logger.error(f"Error executing analysis job {job_id}: {proc_exc}", exc_info=True)
                 continue
 
             # 2. Check script adaptation queue
-            script_task = script_queue.dequeue(timeout=1)
+            script_task = await asyncio.to_thread(script_queue.dequeue, 1)
             if script_task:
                 s_job_id = script_task.get("job_id")
                 s_proj_id = script_task.get("project_id")
                 logger.info(f"Received script task: job_id={s_job_id}, project_id={s_proj_id}")
 
                 try:
-                    asyncio.run(script_service.process_job(s_job_id))
+                    await script_service.process_job(s_job_id)
                     logger.info(f"Successfully processed script job: {s_job_id}")
                 except Exception as s_exc:
                     logger.error(f"Error executing script job {s_job_id}: {s_exc}", exc_info=True)
                 continue
 
             # 3. Check TTS generation queue
-            tts_task = tts_queue.dequeue(timeout=1)
+            tts_task = await asyncio.to_thread(tts_queue.dequeue, 1)
             if tts_task:
                 t_job_id = tts_task.get("job_id")
                 t_proj_id = tts_task.get("project_id")
                 logger.info(f"Received TTS task: job_id={t_job_id}, project_id={t_proj_id}")
 
                 try:
-                    asyncio.run(tts_service.process_job(t_job_id))
+                    await tts_service.process_job(t_job_id)
                     logger.info(f"Successfully processed TTS job: {t_job_id}")
                 except Exception as t_exc:
                     logger.error(f"Error executing TTS job {t_job_id}: {t_exc}", exc_info=True)
                 continue
 
             # 4. Check visual footage search queue
-            f_task = footage_queue.dequeue(timeout=1)
+            f_task = await asyncio.to_thread(footage_queue.dequeue, 1)
             if f_task:
                 f_search_id = f_task.get("search_id")
                 f_proj_id = f_task.get("project_id")
                 logger.info(f"Received footage search task: search_id={f_search_id}, project_id={f_proj_id}")
 
                 try:
-                    asyncio.run(footage_service.process_search_job(f_search_id))
+                    await footage_service.process_search_job(f_search_id)
                     logger.info(f"Successfully processed footage search job: {f_search_id}")
                 except Exception as f_exc:
                     logger.error(f"Error executing footage search {f_search_id}: {f_exc}", exc_info=True)
                 continue
 
             # Idle heartbeat
-            time.sleep(0.5)
+            await asyncio.sleep(0.5)
 
-        except KeyboardInterrupt:
-            logger.info("Video worker stopped by user.")
+        except asyncio.CancelledError:
+            logger.info("Video worker task cancelled.")
             break
         except Exception as exc:
             logger.error(f"Unexpected worker loop exception: {exc}", exc_info=True)
-            time.sleep(3)
+            await asyncio.sleep(3)
+
+
+def run_worker() -> None:
+    asyncio.run(main_worker_loop())
 
 
 if __name__ == "__main__":
