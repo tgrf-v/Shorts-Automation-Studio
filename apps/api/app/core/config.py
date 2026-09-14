@@ -33,7 +33,9 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    GOOGLE_TTS_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID: str = ""
 
     # Reference Analysis Settings
     STT_PROVIDER: str = "faster_whisper"
@@ -49,6 +51,24 @@ class Settings(BaseSettings):
     SCRIPT_MAX_DURATION_RATIO: float = 1.15
     SCRIPT_MIN_DURATION_RATIO: float = 0.85
     SCRIPT_QUEUE_NAME: str = "shorts:queue:script"
+
+    # Milestone 5: TTS & Audio Timeline Settings
+    TTS_PROVIDER: str = "google"
+    TTS_MODEL: str = ""
+    TTS_VOICE: str = "id-ID-Standard-A"
+    TTS_QUEUE_NAME: str = "shorts:queue:tts"
+
+    # Milestone 6: Visual Footage Search Settings
+    FOOTAGE_SEARCH_PROVIDER: str = "youtube"
+    FOOTAGE_SEARCH_QUEUE_NAME: str = "shorts:queue:footage_search"
+    FOOTAGE_MAX_QUERIES_PER_SCENE: int = 4
+    FOOTAGE_MAX_RESULTS_PER_QUERY: int = 10
+    FOOTAGE_MAX_TOTAL_CANDIDATES: int = 30
+    FOOTAGE_VISUAL_WEIGHT: float = 0.60
+    FOOTAGE_CONTEXT_WEIGHT: float = 0.25
+    FOOTAGE_METADATA_WEIGHT: float = 0.15
+    YOUTUBE_API_KEY: str = ""
+    QDRANT_COLLECTION_FOOTAGE: str = "scene_visual_embeddings"
 
     if HAS_PYDANTIC_SETTINGS and SettingsConfigDict is not None:
         model_config = SettingsConfigDict(

@@ -17,6 +17,7 @@ import {
   Loader2,
   AlertCircle,
   ExternalLink,
+  Volume2,
 } from 'lucide-react';
 import { getProject } from '@/lib/api/projects';
 import { getProjectAnalysis } from '@/lib/api/analysis';
@@ -294,6 +295,15 @@ export default function ScriptAdaptationPage({ params }: ScriptPageProps) {
 
         {/* Action Controls */}
         <div className="flex items-center gap-3 shrink-0">
+          <Link
+            href={`/projects/${projectId}/tts`}
+            className="inline-flex items-center gap-2 rounded-xl bg-purple-600/90 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition-all"
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+            <span>TTS & Narration</span>
+            <span className="text-[10px] bg-purple-800/80 px-1.5 py-0.5 rounded text-purple-200">M5</span>
+          </Link>
+
           <button
             onClick={() => setIsGenerateModalOpen(true)}
             disabled={isTriggering || Boolean(activeJob)}

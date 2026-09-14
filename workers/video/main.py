@@ -51,8 +51,12 @@ def run_worker() -> None:
     from app.services.analysis.media_analysis import reference_analysis_service
     from app.services.script.queue import script_queue
     from app.services.script.script_service import script_service
+    from app.services.tts.queue import tts_queue
+    from app.services.tts.tts_service import tts_service
+    from app.services.footage.queue import footage_queue
+    from app.services.footage.footage_service import footage_service
 
-    logger.info(f"Worker actively listening on queues '{analysis_queue.queue_name}' and '{script_queue.queue_name}'...")
+    logger.info(f"Worker actively listening on queues '{analysis_queue.queue_name}', '{script_queue.queue_name}', '{tts_queue.queue_name}', and '{footage_queue.queue_name}'...")
 
     while True:
         try:
@@ -82,6 +86,34 @@ def run_worker() -> None:
                     logger.info(f"Successfully processed script job: {s_job_id}")
                 except Exception as s_exc:
                     logger.error(f"Error executing script job {s_job_id}: {s_exc}", exc_info=True)
+                continue
+
+            # 3. Check TTS generation queue
+            tts_task = tts_queue.dequeue(timeout=1)
+            if tts_task:
+                t_job_id = tts_task.get("job_id")
+                t_proj_id = tts_task.get("project_id")
+                logger.info(f"Received TTS task: job_id={t_job_id}, project_id={t_proj_id}")
+
+                try:
+                    asyncio.run(tts_service.process_job(t_job_id))
+                    logger.info(f"Successfully processed TTS job: {t_job_id}")
+                except Exception as t_exc:
+                    logger.error(f"Error executing TTS job {t_job_id}: {t_exc}", exc_info=True)
+                continue
+
+            # 4. Check visual footage search queue
+            f_task = footage_queue.dequeue(timeout=1)
+            if f_task:
+                f_search_id = f_task.get("search_id")
+                f_proj_id = f_task.get("project_id")
+                logger.info(f"Received footage search task: search_id={f_search_id}, project_id={f_proj_id}")
+
+                try:
+                    asyncio.run(footage_service.process_search_job(f_search_id))
+                    logger.info(f"Successfully processed footage search job: {f_search_id}")
+                except Exception as f_exc:
+                    logger.error(f"Error executing footage search {f_search_id}: {f_exc}", exc_info=True)
                 continue
 
             # Idle heartbeat

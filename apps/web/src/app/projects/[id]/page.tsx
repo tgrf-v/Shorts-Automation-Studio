@@ -14,6 +14,8 @@ import {
   Trash2,
   AlertCircle,
   RefreshCw,
+  Volume2,
+  Film,
 } from 'lucide-react';
 
 interface ProjectPageProps {
@@ -138,8 +140,26 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             href={`/projects/${project.id}/script`}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-600/20 hover:bg-blue-500 transition-colors"
           >
-            <span>Script Adaptation</span>
-            <span className="text-[10px] bg-blue-700/60 px-1.5 py-0.5 rounded text-blue-200">Milestone 4</span>
+            <span>Script</span>
+            <span className="text-[10px] bg-blue-700/60 px-1.5 py-0.5 rounded text-blue-200">M4</span>
+          </Link>
+
+          <Link
+            href={`/projects/${project.id}/tts`}
+            className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-purple-600/20 hover:bg-purple-500 transition-colors"
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+            <span>TTS & Audio</span>
+            <span className="text-[10px] bg-purple-700/60 px-1.5 py-0.5 rounded text-purple-200">M5</span>
+          </Link>
+
+          <Link
+            href={`/projects/${project.id}/footage`}
+            className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-amber-600/20 hover:bg-amber-500 transition-colors"
+          >
+            <Film className="h-3.5 w-3.5" />
+            <span>Footage</span>
+            <span className="text-[10px] bg-amber-700/60 px-1.5 py-0.5 rounded text-amber-200">M6</span>
           </Link>
 
           <button
