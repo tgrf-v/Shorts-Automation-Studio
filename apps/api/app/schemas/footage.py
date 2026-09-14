@@ -79,3 +79,9 @@ class SceneFootageSummaryItem(BaseModel):
     total_candidates: int
     has_selection: bool
     selected_candidate: Optional[FootageCandidateSchema] = None
+
+
+class RangeSelectRequest(BaseModel):
+    start_sequence: int = Field(..., description="First scene sequence in range")
+    end_sequence: int = Field(..., description="Last scene sequence in range")
+    project_id: Optional[uuid.UUID] = Field(default=None, description="Optional project ID")

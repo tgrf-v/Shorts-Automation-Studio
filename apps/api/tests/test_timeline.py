@@ -60,6 +60,30 @@ class TestTimelineServiceLogic(unittest.TestCase):
         self.assertEqual(end, 3.5)
         self.assertFalse(insufficient)
 
+    def test_continuous_trimming_across_consecutive_scenes(self):
+        """When multiple consecutive scenes share the same candidate, footage offsets continue seamlessly."""
+        cand_id = uuid.uuid4()
+        cand_duration = 20.0
+        scenes_durations = [1.6, 1.2, 2.5]  # 3 consecutive scenes
+
+        prev_id = None
+        prev_end = 0.0
+        results = []
+
+        for dur in scenes_durations:
+            if prev_id and prev_id == cand_id:
+                start = round(prev_end, 2)
+            else:
+                start = 0.0
+            end = round(start + dur, 2)
+            prev_id = cand_id
+            prev_end = end
+            results.append((start, end))
+
+        self.assertEqual(results[0], (0.0, 1.6))
+        self.assertEqual(results[1], (1.6, 2.8))
+        self.assertEqual(results[2], (2.8, 5.3))
+
     def test_duration_handling_shorter_footage(self):
         """When candidate duration is shorter than narration, mark insufficient duration."""
         cand_duration = 2.0

@@ -68,3 +68,36 @@ export async function getProjectFootageSummary(projectId: string): Promise<Scene
 export async function listSceneFootageSearches(sceneId: string): Promise<FootageSearch[]> {
   return apiFetch<FootageSearch[]>(`/api/v1/scenes/${sceneId}/footage-searches`);
 }
+
+export async function uploadCustomFootage(
+  sceneId: string,
+  formData: FormData
+): Promise<FootageCandidate> {
+  return apiFetch<FootageCandidate>(
+    `/api/v1/scenes/${sceneId}/custom-footage`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
+}
+
+export async function selectCandidateForRange(
+  candidateId: string,
+  startSequence: number,
+  endSequence: number,
+  projectId?: string
+): Promise<SceneFootageSelection[]> {
+  return apiFetch<SceneFootageSelection[]>(
+    `/api/v1/footage-candidates/${candidateId}/range-select`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_sequence: startSequence,
+        end_sequence: endSequence,
+        project_id: projectId,
+      }),
+    }
+  );
+}

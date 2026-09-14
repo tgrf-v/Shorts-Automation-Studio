@@ -318,5 +318,255 @@ class FootageService:
         )
         return (await db.execute(stmt)).scalar_one_or_none()
 
+    @staticmethod
+    async def select_candidate_for_range(
+        db: AsyncSession,
+        candidate_id: uuid.UUID,
+        start_sequence: int,
+        end_sequence: int,
+        project_id: Optional[uuid.UUID] = None
+    ) -> List[SceneFootageSelection]:
+        """
+        Associates the given candidate footage with all scenes in the project
+        whose sequence falls within [min(start_sequence, end_sequence), max(start_sequence, end_sequence)].
+        """
+        c_stmt = select(FootageCandidate).where(FootageCandidate.id == candidate_id)
+        candidate = (await db.execute(c_stmt)).scalar_one_or_none()
+        if not candidate:
+            raise ValueError(f"FootageCandidate '{candidate_id}' not found.")
+
+        # Determine project_id if not given
+        if not project_id:
+            sc_stmt = select(Scene.project_id).where(Scene.id == candidate.scene_id)
+            project_id = (await db.execute(sc_stmt)).scalar_one_or_none()
+
+        if not project_id:
+            raise ValueError("Could not determine project for candidate.")
+
+        min_seq = min(start_sequence, end_sequence)
+        max_seq = max(start_sequence, end_sequence)
+
+        scenes_stmt = (
+            select(Scene)
+            .where(
+                Scene.project_id == project_id,
+                Scene.sequence >= min_seq,
+                Scene.sequence <= max_seq
+            )
+            .order_by(Scene.sequence.asc())
+        )
+        target_scenes = (await db.execute(scenes_stmt)).scalars().all()
+        if not target_scenes:
+            raise ValueError(f"No scenes found between sequence {min_seq} and {max_seq}.")
+
+        target_scene_ids = [s.id for s in target_scenes]
+        existing_sel_stmt = (
+            select(SceneFootageSelection)
+            .where(SceneFootageSelection.scene_id.in_(target_scene_ids))
+        )
+        existing_selections = {
+            sel.scene_id: sel for sel in (await db.execute(existing_sel_stmt)).scalars().all()
+        }
+
+        selections: List[SceneFootageSelection] = []
+        for sc in target_scenes:
+            sel = existing_selections.get(sc.id)
+            if sel:
+                sel.candidate_id = candidate.id
+                sel.status = "selected"
+                sel.notes = f"Range assigned (Scenes {min_seq}-{max_seq})"
+            else:
+                sel = SceneFootageSelection(
+                    scene_id=sc.id,
+                    candidate_id=candidate.id,
+                    status="selected",
+                    notes=f"Range assigned (Scenes {min_seq}-{max_seq})"
+                )
+                db.add(sel)
+            selections.append(sel)
+
+        await db.commit()
+        for sel in selections:
+            await db.refresh(sel)
+
+        logger.info(f"Assigned candidate {candidate_id} to {len(selections)} scenes (seq {min_seq}-{max_seq}).")
+        return selections
+
+    @staticmethod
+    async def create_custom_footage_candidate(
+        db: AsyncSession,
+        scene_id: uuid.UUID,
+        file_bytes: Optional[bytes] = None,
+        filename: Optional[str] = None,
+        video_url: Optional[str] = None,
+        title: Optional[str] = None,
+        platform: Optional[str] = None,
+        start_sequence: Optional[int] = None,
+        end_sequence: Optional[int] = None
+    ) -> FootageCandidate:
+        """
+        Creates a custom footage candidate from an uploaded video file or online URL (e.g. TikTok / Instagram / YouTube).
+        Downloads online videos with yt-dlp when possible, probes duration with FFprobe,
+        generates thumbnail with FFmpeg, and selects it for the scene (or range of scenes).
+        """
+        stmt = select(Scene).where(Scene.id == scene_id)
+        scene = (await db.execute(stmt)).scalar_one_or_none()
+        if not scene:
+            raise ValueError(f"Scene with ID '{scene_id}' not found.")
+
+        cand_id = uuid.uuid4()
+        clean_platform = (platform or "upload").strip().lower()
+        if video_url:
+            v_url_lower = video_url.lower()
+            if "tiktok.com" in v_url_lower:
+                clean_platform = "tiktok"
+            elif "instagram.com" in v_url_lower:
+                clean_platform = "instagram"
+            elif "youtube.com" in v_url_lower or "youtu.be" in v_url_lower:
+                clean_platform = "youtube"
+            elif clean_platform == "upload":
+                clean_platform = "web"
+
+        local_file_path: Optional[str] = None
+        duration: Optional[float] = None
+        width: Optional[int] = None
+        height: Optional[int] = None
+        thumbnail_url: Optional[str] = None
+
+        storage_dir = os.path.join(settings.MEDIA_STORAGE_PATH, "projects", str(scene.project_id), "footage")
+        os.makedirs(storage_dir, exist_ok=True)
+
+        # 1. Handle File Upload
+        if file_bytes and len(file_bytes) > 0:
+            raw_ext = os.path.splitext(filename or "custom.mp4")[1].lower() or ".mp4"
+            target_filename = f"{cand_id}{raw_ext}"
+            saved_rel = await storage_provider.save(
+                project_id=str(scene.project_id),
+                category="footage",
+                filename=target_filename,
+                content=file_bytes
+            )
+            local_file_path = storage_provider.get_full_path(saved_rel)
+
+        # 2. Handle URL with yt-dlp
+        elif video_url and video_url.strip():
+            loop = asyncio.get_running_loop()
+            def _download_yt_dlp() -> Optional[str]:
+                try:
+                    import yt_dlp
+                    ydl_opts = {
+                        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                        'outtmpl': os.path.join(storage_dir, f"{cand_id}.%(ext)s"),
+                        'noplaylist': True,
+                        'quiet': True,
+                        'no_warnings': True,
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([video_url.strip()])
+                    for f in os.listdir(storage_dir):
+                        if f.startswith(str(cand_id)) and not f.endswith(".jpg"):
+                            return os.path.join(storage_dir, f)
+                    return None
+                except Exception as dl_err:
+                    logger.warning(f"yt-dlp download failed for {video_url}: {dl_err}. Proceeding with URL reference.")
+                    return None
+
+            downloaded = await loop.run_in_executor(None, _download_yt_dlp)
+            if downloaded and os.path.exists(downloaded):
+                local_file_path = downloaded
+        else:
+            raise ValueError("Either video file or video URL must be provided.")
+
+        # 3. Probe metadata & extract thumbnail if local_file_path exists
+        if local_file_path and os.path.exists(local_file_path):
+            from app.services.media_metadata import MediaMetadataService
+            try:
+                meta = await MediaMetadataService.extract(local_file_path)
+                duration = meta.duration
+                width = meta.width
+                height = meta.height
+            except Exception as probe_err:
+                logger.warning(f"Media metadata extraction warning: {probe_err}")
+
+            # Generate thumbnail frame
+            thumb_name = f"{cand_id}_thumb.jpg"
+            thumb_full = os.path.join(storage_dir, thumb_name)
+            loop = asyncio.get_running_loop()
+            def _extract_thumb():
+                try:
+                    import subprocess
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-ss", "00:00:00.5",
+                        "-i", local_file_path,
+                        "-vframes", "1",
+                        "-q:v", "2",
+                        thumb_full
+                    ]
+                    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+                except Exception as th_err:
+                    logger.warning(f"Failed to generate thumbnail for custom footage: {th_err}")
+
+            await loop.run_in_executor(None, _extract_thumb)
+            if os.path.exists(thumb_full):
+                thumbnail_url = f"/api/v1/footage-candidates/{cand_id}/thumbnail"
+
+        # 4. Create search record for tracking
+        search_record = FootageSearch(
+            project_id=scene.project_id,
+            scene_id=scene.id,
+            query=f"Custom: {title or filename or video_url or 'Manual'}",
+            search_provider=clean_platform,
+            status=FootageSearchStatus.COMPLETED,
+            progress=100,
+            current_step="Completed",
+            total_results=1
+        )
+        db.add(search_record)
+        await db.commit()
+        await db.refresh(search_record)
+
+        # 5. Create FootageCandidate entity
+        candidate = FootageCandidate(
+            id=cand_id,
+            footage_search_id=search_record.id,
+            scene_id=scene.id,
+            source_platform=clean_platform,
+            source_url=video_url or filename or "uploaded_video.mp4",
+            video_url=local_file_path or video_url,
+            title=title or filename or f"Custom {clean_platform.capitalize()} Clip",
+            thumbnail_url=thumbnail_url,
+            duration=duration or scene.duration or 5.0,
+            context_score=1.0,
+            visual_score=1.0,
+            similarity_score=1.0,
+            final_score=1.0,
+            match_type="user_custom",
+            metadata_json={
+                "local_file_path": local_file_path,
+                "width": width,
+                "height": height,
+                "custom_upload": True,
+                "platform": clean_platform
+            }
+        )
+        db.add(candidate)
+        await db.commit()
+        await db.refresh(candidate)
+
+        # 6. Apply Selection
+        if start_sequence is not None and end_sequence is not None:
+            await FootageService.select_candidate_for_range(
+                db=db,
+                candidate_id=candidate.id,
+                start_sequence=start_sequence,
+                end_sequence=end_sequence,
+                project_id=scene.project_id
+            )
+        else:
+            await FootageService.select_candidate(db=db, candidate_id=candidate.id)
+
+        return candidate
+
 
 footage_service = FootageService()

@@ -1,11 +1,14 @@
 import uuid
+import os
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, Form, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select, desc, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.scene import Scene
 from app.models.footage_search import FootageSearch
 from app.models.footage_candidate import FootageCandidate
@@ -18,6 +21,7 @@ from app.schemas.footage import (
     SelectCandidateRequest,
     SceneFootageSelectionSchema,
     SceneFootageSummaryItem,
+    RangeSelectRequest,
 )
 
 router = APIRouter(tags=["Visual Footage Search"])
@@ -331,3 +335,138 @@ async def get_project_footage_summary(
         )
 
     return summary_items
+
+
+# 9. Create Custom Footage Candidate (Upload File or Direct Link)
+@router.post(
+    "/scenes/{scene_id}/custom-footage",
+    response_model=FootageCandidateSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload custom video clip (MP4) or add direct video link (TikTok/IG) for a scene"
+)
+async def create_custom_footage(
+    scene_id: uuid.UUID,
+    file: Optional[UploadFile] = File(None),
+    video_url: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+    platform: Optional[str] = Form(None),
+    start_sequence: Optional[int] = Form(None),
+    end_sequence: Optional[int] = Form(None),
+    db: AsyncSession = Depends(get_db)
+) -> FootageCandidateSchema:
+    try:
+        file_bytes = None
+        filename = None
+        if file and file.filename:
+            filename = file.filename
+            file_bytes = await file.read()
+
+        if not file_bytes and (not video_url or not video_url.strip()):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Must provide either a video file upload or a video URL."
+            )
+
+        candidate = await footage_service.create_custom_footage_candidate(
+            db=db,
+            scene_id=scene_id,
+            file_bytes=file_bytes,
+            filename=filename,
+            video_url=video_url.strip() if video_url else None,
+            title=title.strip() if title else None,
+            platform=platform.strip() if platform else None,
+            start_sequence=start_sequence,
+            end_sequence=end_sequence
+        )
+
+        return FootageCandidateSchema(
+            id=candidate.id,
+            footage_search_id=candidate.footage_search_id,
+            scene_id=candidate.scene_id,
+            source_platform=candidate.source_platform,
+            source_url=candidate.source_url,
+            video_url=candidate.video_url,
+            title=candidate.title,
+            description=candidate.description,
+            thumbnail_url=candidate.thumbnail_url,
+            creator=candidate.creator,
+            duration=candidate.duration,
+            published_at=candidate.published_at,
+            search_query=candidate.search_query,
+            context_score=candidate.context_score,
+            visual_score=candidate.visual_score,
+            similarity_score=candidate.similarity_score,
+            final_score=candidate.final_score,
+            match_type=candidate.match_type,
+            is_selected=True,
+            created_at=candidate.created_at
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to process custom footage: {exc}")
+
+
+# 10. Select Candidate for a Range of Scenes
+@router.post(
+    "/footage-candidates/{candidate_id}/range-select",
+    response_model=List[SceneFootageSelectionSchema],
+    summary="Assign candidate footage across a range of scenes"
+)
+async def select_candidate_for_range(
+    candidate_id: uuid.UUID,
+    payload: RangeSelectRequest,
+    db: AsyncSession = Depends(get_db)
+) -> List[SceneFootageSelectionSchema]:
+    try:
+        selections = await footage_service.select_candidate_for_range(
+            db=db,
+            candidate_id=candidate_id,
+            start_sequence=payload.start_sequence,
+            end_sequence=payload.end_sequence,
+            project_id=payload.project_id
+        )
+        return [
+            SceneFootageSelectionSchema(
+                id=s.id,
+                scene_id=s.scene_id,
+                candidate_id=s.candidate_id,
+                status=s.status,
+                notes=s.notes,
+                created_at=s.created_at,
+                updated_at=s.updated_at
+            )
+            for s in selections
+        ]
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to assign footage range: {exc}")
+
+
+# 11. Serve Custom Footage Thumbnail
+@router.get(
+    "/footage-candidates/{candidate_id}/thumbnail",
+    summary="Serve candidate thumbnail image safely by candidate ID"
+)
+async def get_candidate_thumbnail(
+    candidate_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(FootageCandidate).where(FootageCandidate.id == candidate_id)
+    cand = (await db.execute(stmt)).scalar_one_or_none()
+    if not cand:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found.")
+
+    sc_stmt = select(Scene).where(Scene.id == cand.scene_id)
+    scene = (await db.execute(sc_stmt)).scalar_one_or_none()
+    if not scene:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found.")
+
+    storage_dir = os.path.join(settings.MEDIA_STORAGE_PATH, "projects", str(scene.project_id), "footage")
+    thumb_path = os.path.join(storage_dir, f"{cand.id}_thumb.jpg")
+    if os.path.exists(thumb_path):
+        return FileResponse(thumb_path, media_type="image/jpeg")
+
+    # Fallback to 404
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail file not found.")

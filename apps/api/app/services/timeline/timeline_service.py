@@ -186,6 +186,8 @@ class ProductionTimelineService:
         scenes_with_footage = 0
         scenes_missing_footage = 0
         cumulative_time = 0.0
+        prev_footage_candidate_id: Optional[uuid.UUID] = None
+        prev_footage_end_time: float = 0.0
 
         for scene in scenes:
             scene_str_id = str(scene.id)
@@ -221,25 +223,30 @@ class ProductionTimelineService:
                 footage_candidate_id = candidate.id
                 footage_source_url = candidate.source_url
 
+                # Continuous trimming: continue from previous scene if same candidate
+                if prev_footage_candidate_id and prev_footage_candidate_id == candidate.id:
+                    footage_start_time = round(prev_footage_end_time, 2)
+                else:
+                    footage_start_time = 0.0
+
+                footage_end_time = round(footage_start_time + duration, 2)
+
                 # Handle Footage Duration Logic (Section 7)
                 cand_dur = candidate.duration
                 if cand_dur is not None and cand_dur > 0:
                     duration_unknown = False
-                    if cand_dur >= duration:
-                        footage_start_time = 0.0
-                        footage_end_time = duration
+                    if cand_dur >= footage_end_time:
                         insufficient_footage_duration = False
                     else:
-                        # Shorter than narration: mark insufficient duration
-                        footage_start_time = 0.0
-                        footage_end_time = round(cand_dur, 2)
+                        # Shorter than required continuous segment
                         insufficient_footage_duration = True
                 else:
                     # Duration unknown
                     duration_unknown = True
                     insufficient_footage_duration = False
-                    footage_start_time = 0.0
-                    footage_end_time = duration
+
+                prev_footage_candidate_id = candidate.id
+                prev_footage_end_time = footage_end_time
             else:
                 # Missing footage
                 scenes_missing_footage += 1
@@ -249,6 +256,8 @@ class ProductionTimelineService:
                 footage_end_time = 0.0
                 insufficient_footage_duration = False
                 duration_unknown = False
+                prev_footage_candidate_id = None
+                prev_footage_end_time = 0.0
 
             item = ProductionTimelineItem(
                 scene_id=scene.id,

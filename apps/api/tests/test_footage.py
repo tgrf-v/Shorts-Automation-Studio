@@ -239,6 +239,13 @@ class TestFootageSchemas(unittest.TestCase):
         self.assertTrue(cand.is_selected)
         self.assertEqual(cand.match_type, "Possible exact match")
 
+    def test_range_select_request_schema(self):
+        from app.schemas.footage import RangeSelectRequest
+        req = RangeSelectRequest(start_sequence=1, end_sequence=6)
+        self.assertEqual(req.start_sequence, 1)
+        self.assertEqual(req.end_sequence, 6)
+        self.assertIsNone(req.project_id)
+
 
 if __name__ == "__main__":
     unittest.main()
