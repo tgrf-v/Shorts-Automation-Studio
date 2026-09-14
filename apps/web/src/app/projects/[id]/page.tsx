@@ -133,13 +133,23 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           </div>
         </div>
 
-        <button
-          onClick={handleDelete}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-400 hover:bg-rose-500 hover:text-white transition-colors self-start sm:self-auto"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          <span>Delete Project</span>
-        </button>
+        <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
+          <Link
+            href={`/projects/${project.id}/script`}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-600/20 hover:bg-blue-500 transition-colors"
+          >
+            <span>Script Adaptation</span>
+            <span className="text-[10px] bg-blue-700/60 px-1.5 py-0.5 rounded text-blue-200">Milestone 4</span>
+          </Link>
+
+          <button
+            onClick={handleDelete}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500 hover:text-white transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete</span>
+          </button>
+        </div>
       </div>
 
       {/* Reference Video Section */}

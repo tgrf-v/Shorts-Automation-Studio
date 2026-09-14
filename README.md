@@ -142,7 +142,29 @@ python -m pytest tests -v
 - `GEMINI_API_KEY`: Google Gemini API key for visual scene descriptions.
 
 ### Known Limitations
-- Visual footage search, Indonesian script adaptation, TTS voice synthesis, caption burn-in, and timeline rendering are **not implemented yet** (scheduled for subsequent milestones).
+- Visual footage search, TTS voice synthesis, caption burn-in, and timeline rendering are **not implemented yet** (scheduled for subsequent milestones).
+
+---
+
+## Milestone 4: Indonesian Script Adaptation
+
+Milestone 4 implements Indonesian script adaptation, transforming reference video transcripts and detected scene contexts into natural, high-retention Indonesian narration for YouTube Shorts.
+
+### Pipeline Workflow
+1. **Context Preparation**: Assembles full source transcript, individual scenes with timestamps, visual descriptions, and original spoken dialogue.
+2. **LLM Provider Abstraction**: Supports Google Gemini (`gemini-1.5-flash`), OpenAI (`gpt-4o-mini`), and deterministic `mock` provider for offline environments.
+3. **Structured Output Validation**: Validates JSON schema via Pydantic ensuring title, full script, and scene-aligned segments.
+4. **Duration Estimation**: Computes estimated narration duration based on 150 WPM and validates against source duration tolerance (85% - 115%).
+5. **Scene-Aligned Segments**: Maps each script segment directly to detected video scenes with estimated duration metrics.
+6. **Script Versioning & Activation**: Preserves previous versions when regenerating, allowing creators to view, compare, and activate the desired version.
+7. **Manual Editing**: Supports manual modification of title, full script, and scene segments without invoking AI calls.
+8. **Next.js Script Workspace**: Interactive UI (`/projects/[id]/script`) featuring version dropdowns, duration ratio warnings, split source reference view, and live background generation polling.
+
+### Running Backend Tests
+```bash
+cd apps/api
+python -m pytest tests -v
+```
 
 ---
 
@@ -151,4 +173,5 @@ python -m pytest tests -v
 - **Milestone 1**: Project Skeleton & Micro-Service Architecture Initialized.
 - **Milestone 2**: Project Management, Media Asset Upload, and Technical Metadata Extraction.
 - **Milestone 3**: Reference Video Analysis (Audio Extraction, Faster-Whisper Transcription, Scene Cut Detection, Keyframe Scoring, Gemini Scene Descriptions, and Next.js Workspace).
+- **Milestone 4**: Indonesian Script Adaptation (LLM Providers Abstraction, Scene Alignment, Duration Estimation, Versioning & Activation, Manual Editing, and Next.js Script Workspace).
 

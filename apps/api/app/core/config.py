@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     ANALYSIS_MAX_DURATION_SECONDS: int = 180
     ANALYSIS_QUEUE_NAME: str = "shorts:queue:analysis"
 
+    # Milestone 4: Script Adaptation Settings
+    SCRIPT_PROVIDER: str = "gemini"
+    SCRIPT_MODEL: str = "gemini-2.5-flash"
+    SCRIPT_TARGET_WPM: int = 150
+    SCRIPT_MAX_DURATION_RATIO: float = 1.15
+    SCRIPT_MIN_DURATION_RATIO: float = 0.85
+    SCRIPT_QUEUE_NAME: str = "shorts:queue:script"
+
     if HAS_PYDANTIC_SETTINGS and SettingsConfigDict is not None:
         model_config = SettingsConfigDict(
             env_file=".env",

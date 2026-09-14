@@ -49,12 +49,15 @@ def run_worker() -> None:
 
     from app.services.analysis.queue import analysis_queue
     from app.services.analysis.media_analysis import reference_analysis_service
+    from app.services.script.queue import script_queue
+    from app.services.script.script_service import script_service
 
-    logger.info(f"Video worker actively listening on queue '{analysis_queue.queue_name}'...")
+    logger.info(f"Worker actively listening on queues '{analysis_queue.queue_name}' and '{script_queue.queue_name}'...")
 
     while True:
         try:
-            task = analysis_queue.dequeue(timeout=3)
+            # 1. Check video analysis queue
+            task = analysis_queue.dequeue(timeout=1)
             if task:
                 job_id = task.get("job_id")
                 project_id = task.get("project_id")
@@ -65,9 +68,24 @@ def run_worker() -> None:
                     logger.info(f"Successfully processed analysis job: {job_id}")
                 except Exception as proc_exc:
                     logger.error(f"Error executing analysis job {job_id}: {proc_exc}", exc_info=True)
-            else:
-                # Idle heartbeat
-                time.sleep(0.5)
+                continue
+
+            # 2. Check script adaptation queue
+            script_task = script_queue.dequeue(timeout=1)
+            if script_task:
+                s_job_id = script_task.get("job_id")
+                s_proj_id = script_task.get("project_id")
+                logger.info(f"Received script task: job_id={s_job_id}, project_id={s_proj_id}")
+
+                try:
+                    asyncio.run(script_service.process_job(s_job_id))
+                    logger.info(f"Successfully processed script job: {s_job_id}")
+                except Exception as s_exc:
+                    logger.error(f"Error executing script job {s_job_id}: {s_exc}", exc_info=True)
+                continue
+
+            # Idle heartbeat
+            time.sleep(0.5)
 
         except KeyboardInterrupt:
             logger.info("Video worker stopped by user.")
