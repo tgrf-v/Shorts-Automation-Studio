@@ -1,43 +1,132 @@
-export type ProjectStatus =
-  | 'draft'
-  | 'analyzing'
-  | 'script_ready'
-  | 'voice_ready'
-  | 'footage_ready'
-  | 'editing'
-  | 'rendering'
-  | 'completed'
-  | 'failed';
+export type ProjectStatus = 'draft' | 'analyzing' | 'ready' | 'failed';
 
-export type JobStatus =
+export type MediaAssetType =
+  | 'reference'
+  | 'footage'
+  | 'audio'
+  | 'caption'
+  | 'render'
+  | 'other';
+
+export interface MediaAsset {
+  id: string;
+  project_id: string;
+  type: MediaAssetType;
+  filename: string;
+  storage_path: string;
+
+  source_url?: string | null;
+  source_platform?: string | null;
+  mime_type: string;
+  duration?: number | null;
+  width?: number | null;
+  height?: number | null;
+  fps?: number | null;
+  codec?: string | null;
+  size: number;
+  metadata_json?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  status: ProjectStatus;
+  reference_asset_id?: string | null;
+  reference_asset?: MediaAsset | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectListResponse {
+  projects: Project[];
+  total: number;
+}
+
+export interface CreateProjectPayload {
+  name: string;
+}
+
+export interface ApiError {
+  message: string;
+  status?: number;
+}
+
+// Milestone 3: Reference Video Analysis Types
+export type AnalysisJobStatus =
   | 'queued'
   | 'processing'
   | 'completed'
   | 'failed'
   | 'cancelled';
 
-export interface HealthResponse {
-  status: string;
-  app_env: string;
-  version: string;
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
 }
 
-export interface ServiceCheckResult {
-  name: string;
-  status: 'healthy' | 'unhealthy' | 'pending';
-  message?: string;
-  latency_ms?: number;
-}
-
-export interface ProjectMetadata {
+export interface Transcript {
   id: string;
-  name: string;
-  status: ProjectStatus;
+  project_id: string;
+  media_asset_id: string;
+  language: string;
+  provider: string;
+  content: string;
+  segments: TranscriptSegment[];
+  version: number;
   created_at: string;
   updated_at: string;
 }
 
+export interface Keyframe {
+  id: string;
+  scene_id: string;
+  timestamp: number;
+  image_path: string;
+  quality_score: number;
+  created_at: string;
+}
+
+export interface Scene {
+  id: string;
+  project_id: string;
+  sequence: number;
+  start_time: number;
+  end_time: number;
+  duration: number;
+  description?: string | null;
+  transcript_segment: TranscriptSegment[];
+  keyframes: Keyframe[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnalysisJob {
+  id: string;
+  project_id: string;
+  status: AnalysisJobStatus;
+  progress: number;
+  current_step: string;
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectAnalysisResponse {
+  project_id: string;
+  status: string;
+  job?: AnalysisJob | null;
+  transcript?: Transcript | null;
+  scenes: Scene[];
+}
+
+// Milestone 4: Script Adaptation Types
 export type ScriptStatus = 'draft' | 'generating' | 'ready' | 'failed';
+export type ScriptJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 export interface ScriptSegment {
   scene_id: string;
@@ -52,7 +141,7 @@ export interface ScriptSegment {
   estimated_duration?: number;
 }
 
-export interface ScriptMetadata {
+export interface ScriptSummary {
   id: string;
   project_id: string;
   source_transcript_id?: string | null;
@@ -72,8 +161,49 @@ export interface ScriptMetadata {
   updated_at: string;
 }
 
+export interface Script extends ScriptSummary {
+  content: string;
+  segments: ScriptSegment[];
+  instructions?: string | null;
+  error?: string | null;
+}
+
+export interface ScriptJob {
+  id: string;
+  project_id: string;
+  script_id: string;
+  status: ScriptJobStatus;
+  progress: number;
+  current_step: string;
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScriptGeneratePayload {
+  source_transcript_id?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  instructions?: string | null;
+}
+
+export interface ScriptGenerateResponse {
+  job_id: string;
+  script_id: string;
+  status: string;
+}
+
+export interface ScriptUpdatePayload {
+  title?: string;
+  content?: string;
+  segments?: ScriptSegment[];
+}
+
 // Milestone 5: TTS & Audio Timeline Types
 export type TTSStatus = 'queued' | 'processing' | 'completed' | 'failed';
+export type TTSJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 export interface AudioSegment {
   id: string;
@@ -81,13 +211,11 @@ export interface AudioSegment {
   scene_id?: string | null;
   sequence: number;
   text: string;
-  start_time: float_number;
-  end_time: float_number;
-  duration: float_number;
+  start_time: number;
+  end_time: number;
+  duration: number;
   audio_path?: string | null;
 }
-
-type float_number = number;
 
 export interface AudioTimeline {
   generation_id: string;
@@ -141,6 +269,19 @@ export interface TTSVoice {
   gender?: string | null;
   language_codes: string[];
   description?: string | null;
+}
+
+export interface TTSGeneratePayload {
+  script_id?: string | null;
+  provider?: string | null;
+  voice?: string | null;
+  model?: string | null;
+}
+
+export interface TTSGenerateResponse {
+  generation_id: string;
+  job_id: string;
+  status: string;
 }
 
 // Milestone 6: Visual Footage Search Types
@@ -204,6 +345,13 @@ export interface SceneFootageSummaryItem {
   total_candidates: number;
   has_selection: boolean;
   selected_candidate?: FootageCandidate | null;
+}
+
+export interface FootageSearchPayload {
+  query?: string | null;
+  queries?: string[] | null;
+  provider?: string | null;
+  max_results?: number;
 }
 
 // Milestone 7: Production Timeline Types
@@ -278,12 +426,12 @@ export interface ProductionTimeline extends ProductionTimelineSummary {
   items: ProductionTimelineItem[];
 }
 
-export interface ProductionTimelineGenerateRequest {
+export interface ProductionTimelineGeneratePayload {
   script_id?: string | null;
   tts_generation_id?: string | null;
 }
 
-export interface ProductionTimelineItemUpdateRequest {
+export interface ProductionTimelineItemUpdatePayload {
   footage_candidate_id?: string | null;
   footage_start_time?: number | null;
   footage_end_time?: number | null;
@@ -337,19 +485,17 @@ export interface CaptionTrack extends CaptionTrackSummary {
   segments: CaptionSegment[];
 }
 
-export interface CaptionGenerateRequest {
+export interface CaptionGeneratePayload {
   script_id?: string | null;
   tts_generation_id?: string | null;
   production_timeline_id?: string | null;
   target_words_per_segment?: number;
 }
 
-export interface CaptionSegmentUpdateRequest {
+export interface CaptionSegmentUpdatePayload {
   text?: string | null;
   start_time?: number | null;
   end_time?: number | null;
   style?: string | null;
   position?: string | null;
 }
-
-

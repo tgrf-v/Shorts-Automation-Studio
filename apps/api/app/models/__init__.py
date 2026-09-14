@@ -13,6 +13,8 @@ from app.models.tts_job import TTSJob, TTSJobStatus, TTSJobStep
 from app.models.footage_search import FootageSearch, FootageSearchStatus
 from app.models.footage_candidate import FootageCandidate
 from app.models.scene_footage_selection import SceneFootageSelection
+from app.models.production_timeline import ProductionTimeline, ProductionTimelineItem, TimelineStatus
+from app.models.caption import CaptionTrack, CaptionSegment, CaptionTrackStatus
 
 __all__ = [
     "Base",
@@ -41,4 +43,10 @@ __all__ = [
     "FootageSearchStatus",
     "FootageCandidate",
     "SceneFootageSelection",
+    "ProductionTimeline",
+    "ProductionTimelineItem",
+    "TimelineStatus",
+    "CaptionTrack",
+    "CaptionSegment",
+    "CaptionTrackStatus",
 ]
