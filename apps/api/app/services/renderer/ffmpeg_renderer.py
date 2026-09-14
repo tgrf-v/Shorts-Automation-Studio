@@ -20,11 +20,13 @@ logger = logging.getLogger("shorts_api.services.renderer.ffmpeg")
 def escape_ffmpeg_filter_path(path: str) -> str:
     """
     Escapes a filesystem path for use inside FFmpeg filter graphs.
-    Replaces backslashes with forward slashes and escapes colons and single quotes.
+    Replaces backslashes with forward slashes and escapes colons, single quotes, and brackets.
     """
     clean = path.replace("\\", "/")
     clean = clean.replace(":", "\\:")
     clean = clean.replace("'", "\\'")
+    clean = clean.replace("[", "\\[")
+    clean = clean.replace("]", "\\]")
     return clean
 
 
@@ -36,8 +38,29 @@ class FFmpegVideoRenderer(VideoRenderer):
     - Frame-rate normalization & exact trimming
     - Subtitle burn-in via libass
     - Multi-track audio mix with narration priority & BGM ducking
+    - Active process tracking & clean cancellation
     - Stderr progress reporting
     """
+
+    def __init__(self):
+        self._active_processes: Dict[str, asyncio.subprocess.Process] = {}
+        self._cancelled_jobs: set[str] = set()
+
+    def cancel_job(self, job_id: str) -> bool:
+        """Terminates an ongoing FFmpeg render process if active."""
+        key = str(job_id)
+        self._cancelled_jobs.add(key)
+        proc = self._active_processes.get(key)
+        if proc:
+            try:
+                proc.terminate()
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            return True
+        return False
 
     def build_ffmpeg_command(self, plan: RenderExecutionPlan) -> List[str]:
         cfg = plan.config
@@ -234,27 +257,11 @@ class FFmpegVideoRenderer(VideoRenderer):
         if progress_cb:
             progress_cb(10, "Validating render command plan")
 
-        if not has_ffmpeg or is_dry_run:
-            if not is_dry_run and not has_ffmpeg:
+        allow_mock = os.getenv("ALLOW_MOCK_RENDER", "0") == "1"
+        if not has_ffmpeg or is_dry_run or allow_mock:
+            if not has_ffmpeg and not is_dry_run and not allow_mock:
                 msg = f"FFmpeg binary '{ffmpeg_bin}' was not found in system PATH. Cannot perform native render."
-                logger.warning(msg)
-                # If in test/development mode without ffmpeg, synthesize mock mp4 output
-                if os.getenv("APP_ENV") == "test" or os.getenv("ALLOW_MOCK_RENDER", "1") == "1":
-                    logger.info("Generating mock rendered video output for development/test...")
-                    os.makedirs(os.path.dirname(plan.output_video_path), exist_ok=True)
-                    with open(plan.output_video_path, "wb") as f:
-                        f.write(b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41\x00\x00\x00\x08free")
-                    if progress_cb:
-                        progress_cb(100, "Render completed (mock output)")
-                    return RenderResult(
-                        success=True,
-                        output_path=plan.output_video_path,
-                        duration=plan.total_duration,
-                        file_size=os.path.getsize(plan.output_video_path),
-                        width=plan.config.width,
-                        height=plan.config.height,
-                        command_log=" ".join(cmd)
-                    )
+                logger.error(msg)
                 return RenderResult(
                     success=False,
                     output_path=plan.output_video_path,
@@ -262,16 +269,34 @@ class FFmpegVideoRenderer(VideoRenderer):
                     command_log=" ".join(cmd)
                 )
 
+            logger.info("Generating mock rendered video output for development/test/dry-run...")
+            os.makedirs(os.path.dirname(plan.output_video_path), exist_ok=True)
+            with open(plan.output_video_path, "wb") as f:
+                f.write(b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41\x00\x00\x00\x08free")
+            if progress_cb:
+                progress_cb(100, "Render completed (mock output)")
+            return RenderResult(
+                success=True,
+                output_path=plan.output_video_path,
+                duration=plan.total_duration,
+                file_size=os.path.getsize(plan.output_video_path),
+                width=plan.config.width,
+                height=plan.config.height,
+                command_log=" ".join(cmd)
+            )
+
         if progress_cb:
             progress_cb(25, "Executing FFmpeg composition")
 
         # Run FFmpeg asynchronously
+        job_key = str(plan.job_id)
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
+            self._active_processes[job_key] = process
 
             # Parse stderr for progress
             total_duration = max(1.0, plan.total_duration)
@@ -295,6 +320,13 @@ class FFmpegVideoRenderer(VideoRenderer):
             await process.wait()
 
             if process.returncode != 0:
+                if job_key in self._cancelled_jobs:
+                    return RenderResult(
+                        success=False,
+                        output_path=plan.output_video_path,
+                        error="Render job was cancelled by user.",
+                        command_log=" ".join(cmd)
+                    )
                 full_stderr = "".join(stderr_chunks[-50:])
                 logger.error(f"FFmpeg render failed with exit code {process.returncode}:\n{full_stderr}")
                 return RenderResult(
@@ -335,3 +367,6 @@ class FFmpegVideoRenderer(VideoRenderer):
                 error=str(e),
                 command_log=" ".join(cmd)
             )
+        finally:
+            self._active_processes.pop(job_key, None)
+            self._cancelled_jobs.discard(job_key)

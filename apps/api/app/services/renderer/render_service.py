@@ -18,6 +18,7 @@ from app.models.audio_mix import AudioTimeline, AudioType
 from app.models.render_job import RenderJob, RenderJobStatus
 from app.models.media_asset import MediaAsset
 from app.models.footage_candidate import FootageCandidate
+from app.models.script import Script
 
 from app.services.renderer.config import RenderConfig
 from app.services.renderer.base import RenderExecutionPlan, RenderClip, AudioMixInput, RenderResult
@@ -38,8 +39,9 @@ class RenderService:
     builds the execution plan, and coordinates video synthesis.
     """
 
-    def __init__(self, renderer=None, storage_base: Optional[str] = None):
+    def __init__(self, renderer=None, storage_base: Optional[str] = None, session_maker=None):
         self.renderer = renderer or FFmpegVideoRenderer()
+        self.session_maker = session_maker or AsyncSessionLocal
         if storage_base:
             self.storage_base = os.path.abspath(storage_base)
         else:
@@ -64,6 +66,12 @@ class RenderService:
         warnings: List[str] = []
         details: Dict[str, Any] = {}
 
+        # 0. Active Script
+        script_res = await db.execute(
+            select(Script).where(and_(Script.project_id == project_id, Script.is_active == True))
+        )
+        active_script = script_res.scalar_one_or_none()
+
         # 1. Production Timeline
         pt_res = await db.execute(
             select(ProductionTimeline)
@@ -85,7 +93,7 @@ class RenderService:
                 "total_scenes": len(prod_timeline.items)
             }
 
-            # 5. Scene Footage Check
+            # Scene Footage Check
             missing_scenes = []
             for item in prod_timeline.items:
                 if not item.footage_candidate_id:
@@ -94,6 +102,13 @@ class RenderService:
             if missing_scenes:
                 scenes_str = ", ".join(f"Scene {seq}" for seq in missing_scenes)
                 errors.append(f"Cannot render project: {scenes_str} has no selected footage.")
+
+            # Stale check vs active script
+            if active_script and prod_timeline.script_id != active_script.id:
+                errors.append(
+                    "Cannot render project: Production Timeline is stale (active script was modified or regenerated). "
+                    "Please regenerate and activate timeline (M7) first."
+                )
 
         # 2. Active TTS
         tts_res = await db.execute(
@@ -106,11 +121,26 @@ class RenderService:
             errors.append("No completed TTS Narration found. Generate narration audio (M5) first.")
             details["tts_generation"] = None
         else:
+            tts_audio = getattr(tts_gen, "audio_path", None) or getattr(tts_gen, "audio_file_path", None)
+            tts_dur = getattr(tts_gen, "duration", None) or getattr(tts_gen, "total_duration", None)
             details["tts_generation"] = {
                 "id": str(tts_gen.id),
-                "audio_path": tts_gen.audio_file_path,
-                "duration": tts_gen.total_duration
+                "audio_path": tts_audio,
+                "duration": tts_dur
             }
+
+            # Stale check vs timeline
+            if prod_timeline:
+                if prod_timeline.tts_generation_id != tts_gen.id:
+                    errors.append(
+                        "Cannot render project: Production Timeline is stale (TTS narration was regenerated). "
+                        "Please regenerate and activate timeline (M7) first."
+                    )
+                elif prod_timeline.duration and tts_dur and abs(prod_timeline.duration - tts_dur) > 0.5:
+                    errors.append(
+                        f"Cannot render project: Duration mismatch between timeline ({prod_timeline.duration:.2f}s) "
+                        f"and TTS narration ({tts_dur:.2f}s). Please synchronize timeline (M7)."
+                    )
 
         # 3. Active Captions
         cap_res = await db.execute(
@@ -128,6 +158,12 @@ class RenderService:
                 "version": caption_track.version,
                 "total_segments": len(caption_track.segments)
             }
+            # Stale check vs production timeline
+            if prod_timeline and caption_track.production_timeline_id != prod_timeline.id:
+                errors.append(
+                    "Cannot render project: Caption Track is stale (production timeline was updated). "
+                    "Please regenerate captions (M8) first."
+                )
 
         # 4. Active Audio Timeline
         audio_res = await db.execute(
@@ -145,6 +181,12 @@ class RenderService:
                 "version": audio_timeline.version,
                 "total_layers": len(audio_timeline.layers)
             }
+            # Stale check vs production timeline
+            if prod_timeline and audio_timeline.production_timeline_id != prod_timeline.id:
+                errors.append(
+                    "Cannot render project: Audio Timeline is stale (production timeline was updated). "
+                    "Please regenerate audio timeline (M9) first."
+                )
 
         is_ready = len(errors) == 0
         return {
@@ -163,6 +205,28 @@ class RenderService:
         """
         Validates dependencies and creates a pending RenderJob in the database.
         """
+        # Concurrency safeguard: ensure no existing job is currently active for this project
+        active_job_res = await db.execute(
+            select(RenderJob)
+            .where(
+                and_(
+                    RenderJob.project_id == project_id,
+                    RenderJob.status.in_([
+                        RenderJobStatus.PENDING,
+                        RenderJobStatus.VALIDATING,
+                        RenderJobStatus.PREPARING,
+                        RenderJobStatus.RENDERING
+                    ])
+                )
+            )
+        )
+        existing_active = active_job_res.scalars().first()
+        if existing_active:
+            raise ValueError(
+                f"A render job ({existing_active.id}) is already in progress for this project. "
+                f"Please wait for it to complete or cancel it."
+            )
+
         val = await self.validate_dependencies(db, project_id)
         if not val["ready"]:
             raise ValueError(val["errors"][0])
@@ -210,7 +274,7 @@ class RenderService:
         4. Execute FFmpegVideoRenderer
         5. Update job state in database
         """
-        async with AsyncSessionLocal() as db:
+        async with self.session_maker() as db:
             res = await db.execute(
                 select(RenderJob)
                 .where(RenderJob.id == job_id)
@@ -268,8 +332,9 @@ class RenderService:
                             footage_path = item.footage_candidate.video_url
 
                     # Fallback to project reference video if local
-                    if not footage_path and ref_asset and os.path.exists(ref_asset.file_path):
-                        footage_path = ref_asset.file_path
+                    ref_asset_path = getattr(ref_asset, "storage_path", None) or getattr(ref_asset, "file_path", None)
+                    if not footage_path and ref_asset_path and os.path.exists(ref_asset_path):
+                        footage_path = ref_asset_path
 
                     # If still no file on disk, create a placeholder clip or fail
                     if not footage_path or not os.path.exists(footage_path):
@@ -310,7 +375,9 @@ class RenderService:
                 total_duration = round(job.production_timeline.duration or total_duration, 3)
 
                 # 3. Prepare Audio Mix
-                narration_path = job.tts_generation.audio_file_path if job.tts_generation else None
+                narration_path = (
+                    getattr(job.tts_generation, "audio_path", None) or getattr(job.tts_generation, "audio_file_path", None)
+                ) if job.tts_generation else None
                 bgm_inputs = []
                 sfx_inputs = []
 
@@ -360,6 +427,12 @@ class RenderService:
                     total_duration=total_duration
                 )
 
+                # Check if cancelled before starting FFmpeg
+                await db.refresh(job)
+                if job.status == RenderJobStatus.CANCELLED:
+                    logger.info(f"Render job {job_id} was cancelled before execution.")
+                    return
+
                 job.status = RenderJobStatus.RENDERING
                 job.current_step = "Rendering FFmpeg composition"
                 job.progress = 20
@@ -372,6 +445,12 @@ class RenderService:
                 # 5. Execute Render
                 result: RenderResult = await self.renderer.render(plan, progress_cb=on_progress)
 
+                # Check if cancelled during FFmpeg execution
+                await db.refresh(job)
+                if job.status == RenderJobStatus.CANCELLED:
+                    logger.info(f"Render job {job_id} was cancelled during execution.")
+                    return
+
                 # 6. Finalize Job
                 if result.success:
                     job.status = RenderJobStatus.COMPLETED
@@ -381,6 +460,15 @@ class RenderService:
                     job.output_duration = result.duration
                     job.file_size = result.file_size
                     job.completed_at = get_utc_now()
+                    # Clean intermediate files while preserving final output
+                    try:
+                        for fname in os.listdir(workspace_dir):
+                            if fname.startswith("subtitles.") or fname.startswith("mock_") or fname.endswith(".tmp"):
+                                fpath = os.path.join(workspace_dir, fname)
+                                if os.path.isfile(fpath):
+                                    os.remove(fpath)
+                    except Exception:
+                        pass
                 else:
                     job.status = RenderJobStatus.FAILED
                     job.current_step = "Failed"
@@ -391,11 +479,13 @@ class RenderService:
 
             except Exception as e:
                 logger.error(f"Render job {job_id} encountered critical failure: {e}", exc_info=True)
-                job.status = RenderJobStatus.FAILED
-                job.current_step = "Failed"
-                job.error = str(e)
-                job.completed_at = get_utc_now()
-                await db.commit()
+                await db.refresh(job)
+                if job.status != RenderJobStatus.CANCELLED:
+                    job.status = RenderJobStatus.FAILED
+                    job.current_step = "Failed"
+                    job.error = str(e)
+                    job.completed_at = get_utc_now()
+                    await db.commit()
 
     async def _update_job_progress(self, job_id: uuid.UUID, progress: int, step: str) -> None:
         """Helper to periodically persist live progress updates."""
@@ -438,4 +528,21 @@ class RenderService:
         job.current_step = "Cancelled by user"
         job.completed_at = get_utc_now()
         await db.commit()
+
+        # Terminate active process if running
+        if hasattr(self.renderer, "cancel_job"):
+            self.renderer.cancel_job(str(job_id))
+
+        # Clean intermediate files safely
+        workspace_dir = os.path.join(self.storage_base, str(job.project_id), str(job.id))
+        if os.path.exists(workspace_dir):
+            try:
+                for fname in os.listdir(workspace_dir):
+                    if fname.startswith("subtitles.") or fname.startswith("mock_") or fname.endswith(".tmp"):
+                        fpath = os.path.join(workspace_dir, fname)
+                        if os.path.isfile(fpath):
+                            os.remove(fpath)
+            except Exception as e:
+                logger.warning(f"Error during intermediate file cleanup for job {job_id}: {e}")
+
         return True

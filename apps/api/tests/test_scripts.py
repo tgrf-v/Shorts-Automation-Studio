@@ -1,8 +1,15 @@
+import os
+import sys
 import uuid
 import pytest
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+
+_curr = os.path.dirname(os.path.abspath(__file__))
+_root = os.path.abspath(os.path.join(_curr, ".."))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 from app.main import app
 from app.core.database import Base, get_db

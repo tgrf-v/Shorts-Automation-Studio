@@ -1,5 +1,12 @@
 from typing import List
 
+# Ensure FFmpeg and FFprobe binaries are in PATH if static-ffmpeg is installed
+try:
+    import static_ffmpeg
+    static_ffmpeg.add_paths()
+except Exception:
+    pass
+
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
     HAS_PYDANTIC_SETTINGS = True
